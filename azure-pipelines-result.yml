@@ -1,0 +1,74 @@
+# Docker
+# Build a Docker image
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+ paths:
+   include:
+     - result/*
+
+pool:
+ vmImage: ubuntu-latest
+
+resources:
+- repo: self
+
+variables:
+  tag: '$(Build.BuildId)'
+  repository: 'docker1saimanu/voting-app-result'
+
+stages:
+- stage: BuildandPush
+  displayName: BuildandPush
+
+  jobs:
+  - job: BuildandPush
+    displayName: Build and Push
+
+    steps:
+    # Login to Docker Hub
+    - task: Docker@2
+      displayName: Login to Docker Hub
+      inputs:
+        containerRegistry: 'dockerhub-conn'
+        command: 'login'
+
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        containerRegistry: 'dockerhub-conn'
+        repository: 'docker1saimanu/voting-app-result'
+        command: 'build'
+        Dockerfile: 'result/Dockerfile'
+        tags: |
+          $(tag)
+          latest
+
+    - task: Docker@2
+      displayName: Push image
+      inputs:
+        containerRegistry: 'dockerhub-conn'
+        repository: 'docker1saimanu/voting-app-result'
+        command: 'push'
+        tags: |
+          $(tag)
+          latest
+
+# ---------------- UPDATE MANIFEST STAGE ----------------
+
+- stage: Update
+  displayName: Update
+
+  dependsOn: BuildandPush
+
+  jobs:
+    - job: UpdateManifest
+      displayName: Update Kubernetes Manifest
+
+      steps:
+
+        - task: ShellScript@2
+          displayName: Update Deployment Manifest
+          inputs:
+            scriptPath: 'scripts/updatek8smanifests.sh'
+            args: 'result $(repository) $(tag)'
